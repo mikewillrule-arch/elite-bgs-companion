@@ -1,0 +1,51 @@
+{
+  "name": "elite-bgs-companion",
+  "version": "1.0.0",
+  "description": "Elite Dangerous BGS Companion — system tray overlay and journal watcher for the Elite BGS Intelligence Platform",
+  "main": "main.js",
+  "scripts": {
+    "make-icons": "node generate-icon.js",
+    "start": "node generate-icon.js && electron .",
+    "dist": "node generate-icon.js && set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win portable --x64",
+    "dist:installer": "node generate-icon.js && set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "ps-list": "^7.2.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "store.elitebgs.companion",
+    "productName": "Elite BGS Companion",
+    "copyright": "Copyright © 2026 Elite BGS",
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Elite BGS Companion",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "journal-watcher.js",
+      "process-monitor.js",
+      "setup-wizard.html",
+      "generate-icon.js",
+      "assets/**",
+      "node_modules/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**"
+    ]
+  }
+}

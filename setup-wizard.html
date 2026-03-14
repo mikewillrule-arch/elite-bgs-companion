@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Elite BGS Companion — Setup</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;animation:none!important;transition:none!important}
+body{background:#020408;color:#d8eaf6;font-family:'Share Tech Mono',monospace,monospace;font-size:14px;padding:32px 28px;min-height:100vh;display:flex;flex-direction:column;gap:0}
+h1{font-family:Orbitron,sans-serif;font-size:18px;font-weight:900;letter-spacing:4px;color:#00d4ff;text-transform:uppercase;margin-bottom:4px}
+.sub{font-size:12px;color:#9bbdd0;letter-spacing:1px;margin-bottom:24px}
+label{display:block;font-size:11px;letter-spacing:1.5px;color:#9bbdd0;margin-bottom:5px;text-transform:uppercase}
+input{display:block;width:100%;background:rgba(0,212,255,.04);border:none;border-bottom:2px solid rgba(0,212,255,.3);color:#d8eaf6;font-family:inherit;font-size:14px;padding:8px 4px;outline:none;margin-bottom:18px}
+input:focus{border-bottom-color:#00d4ff}
+.row{display:flex;gap:12px}
+.row>div{flex:1}
+button{width:100%;padding:12px;background:transparent;border:1px solid #00d4ff;color:#00d4ff;font-family:inherit;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;margin-top:8px}
+button:hover{background:rgba(0,212,255,.08)}
+button:disabled{border-color:#444;color:#444;cursor:not-allowed}
+#status{font-size:12px;margin-top:14px;min-height:18px;color:#9bbdd0}
+#status.ok{color:#00ff88}
+#status.err{color:#ff2040}
+.divider{border:none;border-top:1px solid rgba(0,212,255,.15);margin:20px 0}
+.note{font-size:11px;color:#9bbdd0;line-height:1.6;padding:10px;border:1px solid rgba(0,212,255,.12);background:rgba(0,212,255,.03)}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>◈ BGS COMPANION SETUP</h1>
+<p class="sub">One-time configuration. Your credentials are stored locally.</p>
+
+<label>Platform Server URL</label>
+<input id="server-url" type="text" value="https://elite-bgs.store" placeholder="https://elite-bgs.store">
+
+<label>Squadron Slug</label>
+<input id="slug" type="text" placeholder="e.g. iron-wolves">
+
+<div class="row">
+  <div>
+    <label>Your CMDR Name</label>
+    <input id="cmdr-name" type="text" placeholder="CMDR Callsign">
+  </div>
+  <div>
+    <label>Your Password</label>
+    <input id="session-key" type="password" placeholder="Leader or CMDR key">
+  </div>
+</div>
+
+<hr class="divider">
+
+<div class="note">
+  ◈ &nbsp;Journal files are auto-detected from<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;<em>Saved Games\Frontier Developments\Elite Dangerous\</em><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;and uploaded automatically while Elite Dangerous is running.
+</div>
+
+<button id="connect-btn" onclick="doSetup()">◈ CONNECT &amp; SAVE</button>
+<div id="status"></div>
+
+<script>
+const isElectron = typeof window.electronAPI !== 'undefined';
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = type || '';
+}
+
+async function doSetup() {
+  // Clean server URL: strip trailing slashes and any /t/slug path
+  let serverUrl = document.getElementById('server-url').value.trim().replace(/\/$/, '');
+  serverUrl = serverUrl.replace(/\/t\/[^/]+.*$/, '');  // strip /t/... if pasted from browser
+
+  // Clean slug: strip leading/trailing slashes and /t/ prefix
+  let slug = document.getElementById('slug').value.trim().toLowerCase();
+  slug = slug.replace(/^\/+|\/+$/g, '').replace(/^t\//, '');
+  const cmdrName  = document.getElementById('cmdr-name').value.trim();
+  const key       = document.getElementById('session-key').value;
+
+  if (!serverUrl || !slug || !cmdrName || !key) {
+    setStatus('⚠ All fields required.', 'err'); return;
+  }
+
+  const btn = document.getElementById('connect-btn');
+  btn.disabled = true;
+  setStatus('Connecting…');
+
+  try {
+    // Step 1: verify slug exists
+    const cfgRes = await fetch(`${serverUrl}/t/${slug}/api/config`);
+    if (!cfgRes.ok) { setStatus('⚠ Squadron not found — check slug and server URL.', 'err'); btn.disabled = false; return; }
+    const cfg = await cfgRes.json();
+
+    // Step 2: attempt CMDR login
+    const loginRes = await fetch(`${serverUrl}/t/${slug}/api/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmdrName, password: key }),
+    });
+
+    // Step 3: try leader login if CMDR login fails
+    let sessionToken = null;
+    let isLeader     = false;
+    let leaderKey    = null;
+
+    if (loginRes.ok) {
+      const loginData = await loginRes.json();
+      sessionToken = loginData.sessionToken || loginData.token || null;
+    }
+
+    if (!sessionToken) {
+      // Try leader key
+      const authRes = await fetch(`${serverUrl}/t/${slug}/api/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        if (authData.ok && authData.isLeader) {
+          isLeader     = true;
+          leaderKey    = key;
+          sessionToken = key; // leaders use their key directly
+        }
+      }
+    }
+
+    if (!sessionToken) {
+      setStatus('⚠ Login failed — check your CMDR name and password.', 'err');
+      btn.disabled = false; return;
+    }
+
+    setStatus(`✓ Connected to ${cfg.squadronName || slug}`, 'ok');
+
+    const config = { serverUrl, slug, cmdrName, sessionToken, isLeader, leaderKey: leaderKey || null };
+
+    if (isElectron) {
+      await window.electronAPI.setupComplete(config);
+    } else {
+      // Browser testing: just show what would be saved
+      alert('Config ready:\n' + JSON.stringify(config, null, 2));
+    }
+  } catch (e) {
+    setStatus('⚠ Error: ' + e.message, 'err');
+    btn.disabled = false;
+  }
+}
+
+// Pre-fill from existing config if available
+if (isElectron) {
+  window.electronAPI.getConfig().then(cfg => {
+    if (cfg.serverUrl)  document.getElementById('server-url').value  = cfg.serverUrl;
+    if (cfg.slug)       document.getElementById('slug').value        = cfg.slug;
+    if (cfg.cmdrName)   document.getElementById('cmdr-name').value   = cfg.cmdrName;
+  });
+}
+</script>
+</body>
+</html>
