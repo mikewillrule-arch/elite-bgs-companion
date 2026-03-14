@@ -4,16 +4,10 @@ A lightweight Windows desktop app that sits in your system tray while you play E
 
 ## What It Does
 
-Elite BGS Companion watches your Elite Dangerous journal directory for game events — missions completed, combat, trade, exploration, faction influence changes — and forwards them to your squadron's BGS dashboard as they happen. You get a small overlay window that stays on top of the game, showing the live dashboard without needing to alt-tab.
+Elite BGS Companion watches your Elite Dangerous journal directory for game events missions completed, combat, trade, exploration, faction influence changes  and forwards them to your squadron's BGS dashboard as they happen. You get a small overlay window that stays on top of the game, showing the live dashboard without needing to alt-tab.
 
 That's it. It reads files. It sends what it reads to your server. Nothing else.
 
-## What It Does NOT Do
-
-- **No screen capture.** The app does not take screenshots, capture your display, or use `desktopCapturer` in any form.
-- **No OCR.** There is no image processing, no text recognition from screenshots, none of it.
-- **No keylogging, no process injection, no game modification.** The app does not interact with Elite Dangerous in any way other than reading the log files the game writes to disk.
-- **No access to your Elite Dangerous account credentials.** It never touches Frontier's authentication systems.
 
 ## What Files It Reads
 
@@ -21,7 +15,7 @@ Elite Dangerous writes a set of well-documented files to your journal directory 
 
 | File | Contents |
 |------|----------|
-| `Journal.*.log` | Main event log — missions, combat, docking, jumps, etc. |
+| `Journal.*.log` | Main event log  missions, combat, docking, jumps, etc. |
 | `Market.json` | Commodity prices at the current station |
 | `Status.json` | Current ship/pilot status |
 | `NavRoute.json` | Plotted navigation route |
@@ -29,7 +23,7 @@ Elite Dangerous writes a set of well-documented files to your journal directory 
 | `Shipyard.json` | Ships available at the current station |
 | `Cargo.json` | Current cargo manifest |
 
-All of these are standard files that Elite Dangerous itself writes. The companion only reads them — it never writes to them or modifies them in any way.
+All of these are standard files that Elite Dangerous itself writes. The companion only reads them  it never writes to them or modifies them in any way.
 
 ## Features
 
@@ -60,11 +54,11 @@ The build uses [electron-builder](https://www.electron.build/) and produces a st
 
 ## Tech Stack
 
-- [Electron](https://www.electronjs.org/) — cross-platform desktop shell
+- [Electron](https://www.electronjs.org/) cross-platform desktop shell
 - Node.js — file watching, HTTP forwarding
 - No bundled AI, no bundled browser extensions, no third-party analytics
 
-The renderer (overlay) loads your squadron's BGS dashboard directly from the configured server URL — it is just a normal web page displayed in an Electron window, the same content you would see if you opened that URL in a browser.
+The renderer (overlay) loads your squadron's BGS dashboard directly from the configured server URL  it is just a normal web page displayed in an Electron window, the same content you would see if you opened that URL in a browser.
 
 ## Security and Privacy
 
@@ -75,7 +69,7 @@ This app is deliberately minimal in what it touches:
 - **No elevated privileges** are required. The app runs as a normal user-space process.
 - **The full source code is in this repository.** Every line of what runs on your machine is here for you to read. If something looks wrong, open an issue or submit a PR.
 
-If you are cautious about running third-party software alongside a game — which is a perfectly reasonable position — the fastest way to verify the app's behaviour is to read `main.js`, `preload.js`, and `journal-watcher.js`. Those three files contain everything the app does.
+If you are cautious about running third-party software alongside a game — which is a perfectly reasonable position  the fastest way to verify the app's behaviour is to read `main.js`, `preload.js`, and `journal-watcher.js`. Those three files contain everything the app does.
 
 ## Configuration
 
