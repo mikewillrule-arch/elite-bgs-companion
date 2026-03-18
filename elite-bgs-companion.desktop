@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Elite BGS Companion
+Comment=Journal upload daemon for Elite BGS Intelligence Platform
+Exec=bash -c 'cd COMPANION_DIR && ./start.sh'
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;
+StartupNotify=false

@@ -1,0 +1,9 @@
+# Personal config — never commit your password
+companion.conf
+
+# Session token (auto-generated)
+.companion.state
+
+# OS noise
+.DS_Store
+Thumbs.db

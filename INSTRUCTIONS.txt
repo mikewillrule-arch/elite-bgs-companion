@@ -1,0 +1,218 @@
+◈ ═══════════════════════════════════════════════════════════════════════════
+◈  ELITE BGS INTELLIGENCE PLATFORM  —  Linux Companion v1.0
+◈ ═══════════════════════════════════════════════════════════════════════════
+
+  Automatically uploads your Elite Dangerous journal events and game files
+  (Market, Status, NavRoute) to your squadron's BGS platform in real time.
+  No OCR. No screen capture. Just the raw journal data, exactly like the
+  Windows companion app.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Node.js 18 or newer  (install.sh handles this automatically)
+  • curl                 (for install.sh — usually pre-installed)
+  • Elite Dangerous running via Steam + Proton, Wine, or Lutris
+  • A registered account on your squadron's portal at elite-bgs.store
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK START  (first time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Open a terminal in this folder.
+
+  2. Run the installer once:
+
+       chmod +x install.sh && ./install.sh
+
+     This checks for Node.js and installs it if missing. Takes about
+     30 seconds. You only need to do this once.
+
+  3. Start the companion:
+
+       ./start.sh
+
+     On first launch a setup wizard will run. It asks for:
+
+       ┌─────────────────────────────────────────────────────────┐
+       │  Server URL      https://elite-bgs.store  (default)     │
+       │  Squadron slug   your squadron's URL slug                │
+       │                  (find it in your dashboard URL:         │
+       │                   elite-bgs.store/t/THIS-PART/)          │
+       │  CMDR name       your in-game commander name             │
+       │  Password        the password you registered with        │
+       │  Journal folder  auto-detected for most installs         │
+       └─────────────────────────────────────────────────────────┘
+
+     Settings are saved to companion.conf — edit it any time.
+
+  4. Leave the terminal open while playing Elite Dangerous.
+     The companion runs in the background and uploads automatically.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  EVERYDAY USE  (after first-time setup)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Start normally:
+    ./start.sh
+
+  With the in-game overlay (opens in a browser window):
+    ./start.sh --overlay
+
+  Replay your current journal from the beginning
+  (useful if you forgot to start the companion before playing):
+    ./start.sh --from-start
+
+  Re-run the setup wizard (e.g. after changing your password):
+    ./start.sh --setup
+
+  Stop the companion:
+    Ctrl + C  in the terminal window
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  THE OVERLAY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Run with --overlay and the companion will open a small browser window
+  showing the real-time BGS overlay (same content as the Windows companion).
+
+    ./start.sh --overlay
+
+  The overlay works best with Chromium (opens as a clean app window with
+  no browser chrome, always on top). Firefox opens it in a normal tab.
+
+  If you're on a single monitor:
+    • Position the browser window on a second screen, or
+    • Use Alt+Tab to switch between ED and the overlay.
+
+  If you're using Steam's Big Picture mode or gaming on a TV:
+    • Try opening the overlay on a phone or tablet instead.
+      Navigate to:  https://elite-bgs.store/t/YOUR-SLUG/overlay
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  DESKTOP LAUNCHER  (optional)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  To add the companion to your desktop or app menu:
+
+  1. Edit elite-bgs-companion.desktop — replace COMPANION_DIR with the
+     full path to this folder.  Example:
+
+       Exec=bash -c 'cd /home/you/companion-linux && ./start.sh'
+
+  2. Copy it to your desktop or app directory:
+
+       cp elite-bgs-companion.desktop ~/Desktop/
+       # or for the app menu:
+       cp elite-bgs-companion.desktop ~/.local/share/applications/
+
+  3. Right-click the icon → Allow Launching  (GNOME / XFCE)
+     or mark it trusted:
+       chmod +x ~/Desktop/elite-bgs-companion.desktop
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WHERE ELITE DANGEROUS WRITES JOURNALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The companion auto-detects the journal folder for these installs:
+
+    Steam + Proton (most common):
+      ~/.steam/steam/steamapps/compatdata/359320/pfx/drive_c/users/
+        steamuser/Saved Games/Frontier Developments/Elite Dangerous/
+
+    Steam XDG path:
+      ~/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/
+        steamuser/Saved Games/Frontier Developments/Elite Dangerous/
+
+    Steam Flatpak:
+      ~/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/compatdata/
+        359320/pfx/drive_c/users/steamuser/Saved Games/
+        Frontier Developments/Elite Dangerous/
+
+    Wine (default prefix):
+      ~/.wine/drive_c/users/YOUR_LINUX_USERNAME/
+        Saved Games/Frontier Developments/Elite Dangerous/
+
+    Lutris:
+      ~/Games/elite-dangerous/drive_c/users/YOUR_LINUX_USERNAME/
+        Saved Games/Frontier Developments/Elite Dangerous/
+
+  If your install isn't listed, the setup wizard will ask for the path.
+  You can also edit journalDir in companion.conf directly.
+
+  To find your journal folder manually:
+    find ~/ -name "Journal.*.log" 2>/dev/null | head -5
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WHAT THE COMPANION UPLOADS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Journal events (batched every 5 seconds):
+    Missions, bounties, combat bonds, trade, exploration data, FSD jumps,
+    docking events — everything Elite Dangerous logs during your session.
+
+  Game files (uploaded within 1 second of change):
+    Market.json    — commodity prices when you open the in-game market
+    Status.json    — your current docked/landed/flying state and location
+    NavRoute.json  — your plotted route
+
+  Nothing is stored locally beyond your companion.conf and a session token.
+  Your password is only sent once at login and never written to disk.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "Auth failed: Login failed"
+    → Check your CMDR name and password in companion.conf.
+      Your CMDR name is case-sensitive and must match your registration.
+      Re-run setup: ./start.sh --setup
+
+  "Journal directory not found — waiting..."
+    → Start Elite Dangerous first, then the companion will find it.
+      Or set journalDir manually in companion.conf.
+
+  "Node.js not found" or "Node.js X found but 18+ required"
+    → Run:  ./install.sh
+      This installs the correct Node.js version automatically.
+
+  Events uploading but CMDR status feed shows nothing in admin
+    → Status data comes from Status.json updates. Start ED and move
+      around — the companion will pick it up within a second.
+
+  Can't find journal folder (custom Proton prefix or Heroic/Epic)
+    → Run:  find ~/ -name "Journal.*.log" 2>/dev/null | tail -1
+      Copy the directory part of that path into companion.conf as journalDir.
+
+  Want to check what's being sent:
+    → The companion prints every event type to the terminal as it uploads.
+
+  Still stuck:
+    → Contact bloodfox8340 on Discord.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILES IN THIS FOLDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  companion.js                  Main script — the companion daemon
+  start.sh                      Start wrapper (use this to launch)
+  install.sh                    One-time installer (checks Node.js)
+  companion.conf.example        Example config — shows all options
+  elite-bgs-companion.desktop   Optional desktop/app-menu launcher
+  INSTRUCTIONS.txt              This file
+
+  Generated on first run:
+  companion.conf                Your personal settings (edit any time)
+  .companion.state              Saved session token (auto-managed)
+
+◈ ═══════════════════════════════════════════════════════════════════════════
