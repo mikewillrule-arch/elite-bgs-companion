@@ -108,13 +108,14 @@ const GAME_FILES = {
 const STATUS_STRIP = new Set(['Pips', 'Firegroup', 'GuiFocus']);
 
 class JournalWatcher {
-  constructor({ serverUrl, slug, cmdrName, sessionToken, journalDir, onStatus, onPathNeeded }) {
+  constructor({ serverUrl, slug, cmdrName, sessionToken, journalDir, onStatus, onPathNeeded, onDocked }) {
     this.serverUrl    = serverUrl || 'https://elite-bgs.store';
     this.slug         = slug;
     this.cmdrName     = cmdrName;
     this.sessionToken = sessionToken;
     this.onStatus     = onStatus     || (() => {});
     this.onPathNeeded = onPathNeeded || (() => {});
+    this.onDocked     = onDocked     || (() => {});
 
     this.watchDir       = findJournalDir(journalDir) || null;
     this.watcher        = null;
@@ -159,6 +160,7 @@ class JournalWatcher {
     }
 
     this.running = true;
+    this._initialScan = true;   // true until chokidar finishes its first scan
     this.onStatus('Journal watcher starting…');
 
     // ── Watch journal log files ───────────────────────────────────────────────
@@ -170,7 +172,8 @@ class JournalWatcher {
 
     this.watcher
       .on('add',    fp => this._onAdded(fp))
-      .on('change', fp => this._onChanged(fp));
+      .on('change', fp => this._onChanged(fp))
+      .on('ready',  () => { this._initialScan = false; });
 
     // ── Watch ALL *.json files in watchDir (game state files) ────────────────
     this.fileWatcher = chokidar.watch(path.join(this.watchDir, '*.json'), {
@@ -208,8 +211,19 @@ class JournalWatcher {
 
   _onAdded(fp) {
     this.onStatus(`Journal: ${path.basename(fp)}`);
-    if (!this.fileOffsets.has(fp)) this.fileOffsets.set(fp, 0);
-    this._readNewBytes(fp);
+    if (!this.fileOffsets.has(fp)) {
+      if (this._initialScan) {
+        // File existed before the watcher started — seek to the end so we don't
+        // replay already-sent events on every restart.
+        try { this.fileOffsets.set(fp, fs.statSync(fp).size); } catch { this.fileOffsets.set(fp, 0); }
+      } else {
+        // Truly new log file created while we are running — read from the start.
+        this.fileOffsets.set(fp, 0);
+        this._readNewBytes(fp);
+      }
+    } else {
+      this._readNewBytes(fp);
+    }
   }
 
   _onChanged(fp) { this._readNewBytes(fp); }
@@ -235,6 +249,12 @@ class JournalWatcher {
         if (!trimmed) continue;
         try {
           const ev = JSON.parse(trimmed);
+
+          // Fire docked callback so the overlay can prompt for Galnet capture
+          if (ev.event === 'Docked' && ev.StarSystem && ev.StationName) {
+            this.onDocked({ systemName: ev.StarSystem, stationName: ev.StationName });
+          }
+
           if (BGS_EVENTS.has(ev.event)) {
             const clean = { ...ev };
             delete clean.UserLocalPart;

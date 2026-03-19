@@ -69,16 +69,17 @@ function saveState(state) {
 
 // ── Journal directory auto-detection ─────────────────────────────────────────
 function findJournalDirs() {
-  const home = os.homedir();
-  const user = os.userInfo().username;
-  const edPath = 'Saved Games/Frontier Developments/Elite Dangerous';
+  const home        = os.homedir();
+  const user        = os.userInfo().username;
+  const edPath      = 'Saved Games/Frontier Developments/Elite Dangerous';
+  const protonInfix = `pfx/drive_c/users/steamuser/${edPath}`;
 
   const candidates = [
     // Steam + Proton — most common Linux installation
-    { label: 'Steam (Proton)',    dir: path.join(home, `.steam/steam/steamapps/compatdata/${ED_APP_ID}/pfx/drive_c/users/steamuser/${edPath}`) },
-    { label: 'Steam XDG',         dir: path.join(home, `.local/share/Steam/steamapps/compatdata/${ED_APP_ID}/pfx/drive_c/users/steamuser/${edPath}`) },
+    { label: 'Steam (Proton)',    dir: path.join(home, `.steam/steam/steamapps/compatdata/${ED_APP_ID}/${protonInfix}`) },
+    { label: 'Steam XDG',         dir: path.join(home, `.local/share/Steam/steamapps/compatdata/${ED_APP_ID}/${protonInfix}`) },
     // Flatpak Steam
-    { label: 'Steam (Flatpak)',   dir: path.join(home, `.var/app/com.valvesoftware.Steam/data/Steam/steamapps/compatdata/${ED_APP_ID}/pfx/drive_c/users/steamuser/${edPath}`) },
+    { label: 'Steam (Flatpak)',   dir: path.join(home, `.var/app/com.valvesoftware.Steam/data/Steam/steamapps/compatdata/${ED_APP_ID}/${protonInfix}`) },
     // Wine (default ~/.wine prefix)
     { label: 'Wine (default)',    dir: path.join(home, `.wine/drive_c/users/${user}/${edPath}`) },
     // Common Lutris prefixes
@@ -87,7 +88,30 @@ function findJournalDirs() {
     { label: 'Lutris (epic)',     dir: path.join(home, `Games/elite-dangerous-epic/drive_c/users/${user}/${edPath}`) },
   ];
 
-  return candidates.filter(c => fs.existsSync(c.dir));
+  // ── Secondary drive scan ────────────────────────────────────────────────────
+  // Steam libraries on secondary drives are typically mounted under /mnt or
+  // /media — the Windows companion handles D:/E:/F: equivalents; this does the
+  // same for Linux mount points.
+  const mountRoots = [];
+  const _tryRead = dir => { try { return fs.readdirSync(dir); } catch { return []; } };
+
+  _tryRead('/mnt').forEach(d => mountRoots.push(`/mnt/${d}`));
+  _tryRead(`/media/${user}`).forEach(d => mountRoots.push(`/media/${user}/${d}`));
+  // Also check /media directly for drive-named mounts (some distros skip the username subdir)
+  _tryRead('/media').filter(d => d !== user).forEach(d => mountRoots.push(`/media/${d}`));
+
+  for (const root of mountRoots) {
+    // Standard Steam library layouts on secondary drives
+    for (const libSub of ['SteamLibrary', 'Steam', 'steam', '']) {
+      const base = libSub ? path.join(root, libSub) : root;
+      candidates.push({ label: `Secondary drive ${root}${libSub ? '/' + libSub : ''}`, dir: path.join(base, 'steamapps', 'compatdata', ED_APP_ID, protonInfix) });
+    }
+    // Heroic Games Launcher (Proton) — common on secondary drives
+    candidates.push({ label: `Heroic (${root})`, dir: path.join(root, 'Games', 'Heroic', 'Prefixes', 'elite-dangerous', 'pfx', 'drive_c', 'users', 'steamuser', edPath) });
+    candidates.push({ label: `Heroic (${root})`, dir: path.join(root, 'Games', 'Heroic', 'Prefixes', 'EliteDangerous', 'pfx', 'drive_c', 'users', 'steamuser', edPath) });
+  }
+
+  return candidates.filter(c => { try { return fs.existsSync(c.dir); } catch { return false; } });
 }
 
 // ── Interactive setup wizard ──────────────────────────────────────────────────
@@ -206,6 +230,43 @@ async function uploadGameFile(cfg, token, fileType, data) {
   return 'ok';
 }
 
+// ── GalNet Courier — screenshot capture via system tools ──────────────────────
+// Tried in order; first binary found on $PATH wins.
+// Each entry: [binary_name, fn(outFile) → shell_command_string]
+const _SHOT_CMDS = [
+  ['scrot',            f => `scrot -q 85 "${f}"`],
+  ['import',           f => `import -window root -quality 85 "${f}"`],  // ImageMagick
+  ['gnome-screenshot', f => `gnome-screenshot -f "${f}"`],
+  ['grim',             f => `grim "${f}"`],                              // Wayland
+  ['spectacle',        f => `spectacle -b -o "${f}"`],                   // KDE
+];
+
+function _detectShotTool() {
+  for (const [bin] of _SHOT_CMDS) {
+    try { execSync(`which ${bin} 2>/dev/null`, { stdio: 'ignore' }); return bin; } catch {}
+  }
+  return null;
+}
+
+function _takeScreenshot(bin, outFile) {
+  const entry = _SHOT_CMDS.find(([b]) => b === bin);
+  if (!entry) return false;
+  try {
+    execSync(entry[1](outFile), { timeout: 5000, stdio: 'ignore' });
+    return fs.existsSync(outFile);
+  } catch { return false; }
+}
+
+// BGS-relevant event types — only these are uploaded to the server
+const BGS_EVENTS = new Set([
+  'MissionCompleted', 'MissionAccepted', 'MissionAbandoned', 'MissionFailed',
+  'BountyRedeemed', 'RedeemVoucher', 'FactionKillBond',
+  'MarketSell', 'MarketBuy',
+  'SellExplorationData', 'MultiSellExplorationData',
+  'FSDJump', 'Location', 'Docked', 'Undocked',
+  'CargoDepot',
+]);
+
 // ── Journal file helpers ──────────────────────────────────────────────────────
 function getLatestJournal(dir) {
   try {
@@ -297,6 +358,84 @@ async function main() {
     flushTimer = setTimeout(async () => { flushTimer = null; await flushEvents(); }, FLUSH_DELAY);
   }
 
+  // ── GalNet Courier prompt ─────────────────────────────────────────────────
+  let _galnetActive = false;
+
+  async function promptGalnetCapture(systemName, stationName) {
+    // Skip if already prompting, or if stdin is not a real terminal (daemon mode)
+    if (_galnetActive || !process.stdin.isTTY) return;
+
+    const tool = _detectShotTool();
+    if (!tool) {
+      warn('GalNet capture unavailable — install scrot, ImageMagick (import), grim, gnome-screenshot, or spectacle');
+      return;
+    }
+
+    _galnetActive = true;
+    console.log();
+    console.log(`${cyan('◈')}  ${bold('GALNET COURIER')} — docked at ${bold(stationName)} in ${bold(systemName)}`);
+    console.log(`   ${dim('Navigate to GalNet News at the station and scroll slowly through the articles.')}`);
+    console.log(`   ${dim('The companion will capture 15 screenshots over 30 s and upload them for AI processing.')}`);
+    console.log(`   ${dim('Couriers receive recognition in the squadron Discord. o7')}`);
+
+    const iface  = rl_mod.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise(resolve => iface.question(`\n  ${cyan('Capture GalNet news now? [y/N]')}: `, resolve));
+    iface.close();
+
+    if (answer.trim().toLowerCase() !== 'y') {
+      console.log();
+      _galnetActive = false;
+      return;
+    }
+
+    console.log();
+    info(`Using ${bold(tool)} — scroll through GalNet now!`);
+
+    const screenshots = [];
+    const tmpDir      = os.tmpdir();
+
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const outFile = path.join(tmpDir, `galnet_${Date.now()}_${i}.jpg`);
+      const ok_shot = _takeScreenshot(tool, outFile);
+      if (ok_shot) {
+        try {
+          screenshots.push(fs.readFileSync(outFile).toString('base64'));
+          fs.unlinkSync(outFile);
+        } catch {}
+      }
+      process.stdout.write(`\r  ${cyan('◈')}  Captured ${i + 1} / 15   `);
+    }
+    console.log();
+
+    if (!screenshots.length) {
+      warn('No screenshots captured — aborting upload.');
+      _galnetActive = false;
+      return;
+    }
+
+    ok(`${screenshots.length} screenshot(s) captured — uploading to platform...`);
+    if (!await ensureAuth()) { _galnetActive = false; return; }
+
+    try {
+      const { status, ok: success, data } = await apiPost(
+        `${cfg.serverUrl}/t/${cfg.slug}/api/galnet-capture`,
+        token,
+        { screenshots, systemName, stationName, cmdrName: cfg.cmdrName }
+      );
+      if (success) {
+        ok('GalNet intel uploaded! Thank you, Courier. o7');
+      } else {
+        warn(`Upload failed (${status}): ${data.error || ''}`);
+      }
+    } catch (e) {
+      warn(`Upload error: ${e.message}`);
+    }
+
+    console.log();
+    _galnetActive = false;
+  }
+
   // ── Tail current journal file from filePos ────────────────────────────────
   function readNewJournalContent() {
     if (!currentFile) return;
@@ -309,11 +448,16 @@ async function main() {
       fs.closeSync(fd);
       filePos = stat.size;
 
-      const newEvents = parseJsonLines(buf.toString('utf8'));
+      const allEvents = parseJsonLines(buf.toString('utf8'));
+      const newEvents = allEvents.filter(ev => BGS_EVENTS.has(ev.event));
       if (!newEvents.length) return;
 
       for (const ev of newEvents) {
         log(`  + ${dim(ev.event)}${ev.StarSystem ? dim(' @ ' + ev.StarSystem) : ''}`);
+        // Fire GalNet courier prompt on Docked events
+        if (ev.event === 'Docked' && ev.StarSystem && ev.StationName) {
+          promptGalnetCapture(ev.StarSystem, ev.StationName).catch(() => {});
+        }
       }
       eventBuf.push(...newEvents);
       scheduleFlush();

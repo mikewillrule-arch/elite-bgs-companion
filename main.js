@@ -211,12 +211,112 @@ ipcMain.handle('select-journal-folder', async () => {
   return null;
 });
 
+// Save login credentials (remember me)
+ipcMain.handle('save-login', (_, { cmdrName, password }) => {
+  config.savedCmdrName = cmdrName || config.savedCmdrName;
+  config.savedPassword = password || config.savedPassword;
+  saveConfig(config);
+  return true;
+});
+
+// Screen capture — returns JPEG as base64 string
+ipcMain.handle('capture-screen', async () => {
+  try {
+    const { desktopCapturer } = require('electron');
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+    });
+    if (!sources.length) return null;
+    return sources[0].thumbnail.toJPEG(85).toString('base64');
+  } catch (e) {
+    console.error('[capture] Screen capture failed:', e.message);
+    return null;
+  }
+});
+
+// Dismiss the Galnet prompt without capturing
+ipcMain.handle('dismiss-galnet-prompt', () => true);
+
+// Galnet capture — takes 15 screenshots every 2 s (30 s total) then uploads
+let _galnetCapturing = false;
+ipcMain.handle('start-galnet-capture', async (_, { systemName, stationName }) => {
+  if (_galnetCapturing) return { ok: false, error: 'Capture already in progress' };
+  _galnetCapturing = true;
+
+  const { desktopCapturer } = require('electron');
+  const screenshots = [];
+  const TOTAL       = 15;   // 15 shots × 2 s = 30 s
+
+  for (let i = 0; i < TOTAL; i++) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1920, height: 1080 },
+      });
+      if (sources.length) {
+        screenshots.push(sources[0].thumbnail.toJPEG(85).toString('base64'));
+      }
+    } catch {}
+    overlayWin?.webContents.send('galnet-capture-progress', { current: i + 1, total: TOTAL });
+  }
+
+  _galnetCapturing = false;
+
+  if (screenshots.length && config.sessionToken && config.slug && config.cmdrName) {
+    _uploadGalnetCapture(screenshots, systemName, stationName);
+  }
+
+  overlayWin?.webContents.send('galnet-capture-done', { count: screenshots.length });
+  return { ok: true, count: screenshots.length };
+});
+
+// Upload Galnet screenshots to the platform for AI processing
+function _uploadGalnetCapture(screenshots, systemName, stationName) {
+  const serverUrl = config.serverUrl || 'https://elite-bgs.store';
+  const slug      = config.slug      || '';
+  const body      = JSON.stringify({
+    screenshots,
+    systemName,
+    stationName:  stationName || '',
+    cmdrName:     config.cmdrName,
+  });
+
+  try {
+    const parsed = new URL(`${serverUrl}/t/${slug}/api/galnet-capture`);
+    const lib    = parsed.protocol === 'https:' ? require('https') : require('http');
+    const req    = lib.request({
+      hostname: parsed.hostname,
+      port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path:     parsed.pathname,
+      method:   'POST',
+      headers:  {
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'x-session-key':  config.sessionToken,
+      },
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => console.log('[galnet] Upload response:', res.statusCode));
+    });
+    req.on('error', e => console.error('[galnet] Upload error:', e.message));
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('[galnet] Upload failed:', e.message);
+  }
+}
+
 // Update session key in config (called after overlay login)
 ipcMain.handle('set-session', (_, { slug, cmdrName, sessionToken, isLeader, leaderKey }) => {
-  Object.assign(config, { slug, cmdrName, sessionToken, isLeader: !!isLeader, leaderKey: leaderKey || null });
+  Object.assign(config, { slug, cmdrName, sessionToken, isLeader: !!isLeader, leaderKey: leaderKey || null, setupComplete: true });
   saveConfig(config);
   // Pass new credentials to journal watcher
   if (journalWatcher) journalWatcher.updateCredentials({ slug, cmdrName, sessionToken, serverUrl: config.serverUrl });
+  // Start background services if they weren't started yet (user logged in via overlay instead of setup wizard)
+  if (!journalWatcher) startServices();
 });
 
 function startServices() {
@@ -238,6 +338,12 @@ function startServices() {
       overlayWin?.webContents.send('journal-path-needed');
       // Also show a native dialog as a fallback
       _promptJournalFolder();
+    },
+    onDocked: ({ systemName, stationName }) => {
+      console.log('[companion] Docked at', stationName, 'in', systemName);
+      if (overlayWin && !_galnetCapturing) {
+        overlayWin.webContents.send('show-galnet-prompt', { systemName, stationName });
+      }
     },
   });
 
@@ -282,6 +388,25 @@ async function _promptJournalFolder() {
     saveConfig(config);
     if (journalWatcher) journalWatcher.updateJournalDir(chosen);
   }
+}
+
+// ── Single-instance lock ──────────────────────────────────────────────────────
+// Prevents multiple companion instances from running simultaneously.
+// Without this, every launch stacks a new Electron process on top of the old one.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  // Another instance is already running — hand off focus and exit immediately.
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Someone launched a second instance — bring the existing window to the front.
+    if (overlayWin) {
+      if (overlayWin.isMinimized()) overlayWin.restore();
+      overlayWin.focus();
+    } else if (setupWin) {
+      setupWin.focus();
+    }
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────

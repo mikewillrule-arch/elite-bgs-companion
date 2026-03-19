@@ -56,6 +56,10 @@ button:disabled{border-color:#444;color:#444;cursor:not-allowed}
   &nbsp;&nbsp;&nbsp;&nbsp;and uploaded automatically while Elite Dangerous is running.
 </div>
 
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+  <input type="checkbox" id="remember-me" style="width:auto;margin:0;accent-color:#00d4ff">
+  <label for="remember-me" style="font-size:11px;color:#9bbdd0;text-transform:none;margin:0;cursor:pointer">Remember password for auto-login</label>
+</div>
 <button id="connect-btn" onclick="doSetup()">◈ CONNECT &amp; SAVE</button>
 <div id="status"></div>
 
@@ -134,7 +138,11 @@ async function doSetup() {
 
     setStatus(`✓ Connected to ${cfg.squadronName || slug}`, 'ok');
 
-    const config = { serverUrl, slug, cmdrName, sessionToken, isLeader, leaderKey: leaderKey || null };
+    const rememberMe = document.getElementById('remember-me').checked;
+    const config = {
+      serverUrl, slug, cmdrName, sessionToken, isLeader, leaderKey: leaderKey || null,
+      ...(rememberMe ? { savedCmdrName: cmdrName, savedPassword: key } : {}),
+    };
 
     if (isElectron) {
       await window.electronAPI.setupComplete(config);
@@ -151,9 +159,13 @@ async function doSetup() {
 // Pre-fill from existing config if available
 if (isElectron) {
   window.electronAPI.getConfig().then(cfg => {
-    if (cfg.serverUrl)  document.getElementById('server-url').value  = cfg.serverUrl;
-    if (cfg.slug)       document.getElementById('slug').value        = cfg.slug;
-    if (cfg.cmdrName)   document.getElementById('cmdr-name').value   = cfg.cmdrName;
+    if (cfg.serverUrl)     document.getElementById('server-url').value  = cfg.serverUrl;
+    if (cfg.slug)          document.getElementById('slug').value        = cfg.slug;
+    if (cfg.cmdrName || cfg.savedCmdrName) document.getElementById('cmdr-name').value = cfg.cmdrName || cfg.savedCmdrName;
+    if (cfg.savedPassword) {
+      document.getElementById('session-key').value = cfg.savedPassword;
+      document.getElementById('remember-me').checked = true;
+    }
   });
 }
 </script>
