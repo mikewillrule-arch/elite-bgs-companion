@@ -127,16 +127,43 @@ function setupTray() {
     tray = new Tray(nativeImage.createEmpty());
   }
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show / Hide Overlay',  click: () => toggleExpand() },
-    { label: 'Settings',             click: () => createSetupWindow() },
-    { type:  'separator' },
-    { label: 'Quit Elite BGS Companion', click: () => app.quit() },
-  ]);
+  function buildTrayMenu() {
+    const overlayVisible = overlayWin?.isVisible() ?? false;
+    return Menu.buildFromTemplate([
+      {
+        label: overlayVisible ? 'Hide Overlay Button' : 'Show Overlay Button',
+        click: () => {
+          if (!overlayWin) return;
+          if (overlayWin.isVisible()) {
+            overlayWin.hide();
+          } else {
+            overlayWin.show();
+            toggleExpand(false);   // restore to collapsed state when reshown
+          }
+          tray.setContextMenu(buildTrayMenu());
+        },
+      },
+      { label: 'Expand Intel Panel',       click: () => { overlayWin?.show(); toggleExpand(true); } },
+      { label: 'Settings',                 click: () => createSetupWindow() },
+      { type:  'separator' },
+      { label: 'Quit Elite BGS Companion', click: () => app.quit() },
+    ]);
+  }
 
   tray.setToolTip('Elite BGS Companion');
-  tray.setContextMenu(contextMenu);
-  tray.on('click', () => toggleExpand());
+  tray.setContextMenu(buildTrayMenu());
+
+  // Left-click: show overlay if hidden, otherwise toggle expand/collapse
+  tray.on('click', () => {
+    if (!overlayWin) return;
+    if (!overlayWin.isVisible()) {
+      overlayWin.show();
+      toggleExpand(false);
+      tray.setContextMenu(buildTrayMenu());
+    } else {
+      toggleExpand();
+    }
+  });
 }
 
 // ── Toggle expand / collapse ──────────────────────────────────────────────────
@@ -225,7 +252,7 @@ ipcMain.handle('capture-screen', async () => {
     const { desktopCapturer } = require('electron');
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: 1920, height: 1080 },
+      thumbnailSize: { width: 1280, height: 720 },
     });
     if (!sources.length) return null;
     return sources[0].thumbnail.toJPEG(85).toString('base64');
@@ -253,7 +280,7 @@ ipcMain.handle('start-galnet-capture', async (_, { systemName, stationName }) =>
     try {
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
-        thumbnailSize: { width: 1920, height: 1080 },
+        thumbnailSize: { width: 1280, height: 720 },
       });
       if (sources.length) {
         screenshots.push(sources[0].thumbnail.toJPEG(85).toString('base64'));
@@ -320,6 +347,11 @@ ipcMain.handle('set-session', (_, { slug, cmdrName, sessionToken, isLeader, lead
 });
 
 function startServices() {
+  // Stop any existing instances before creating new ones — prevents duplicate
+  // journal watchers when setup-complete is called while services are running.
+  if (journalWatcher) { journalWatcher.stop(); journalWatcher = null; }
+  if (processMonitor) { processMonitor.stop(); processMonitor = null; }
+
   const { JournalWatcher } = require('./journal-watcher');
   const ProcessMonitor      = require('./process-monitor');
 
@@ -344,6 +376,12 @@ function startServices() {
       if (overlayWin && !_galnetCapturing) {
         overlayWin.webContents.send('show-galnet-prompt', { systemName, stationName });
       }
+    },
+    onUndocked: () => {
+      // Dismiss the GalNet Courier prompt the moment the player undocks —
+      // prevents it from lingering while flying between systems.
+      overlayWin?.webContents.send('dismiss-galnet-prompt');
+      console.log('[companion] Undocked — GalNet prompt dismissed');
     },
   });
 

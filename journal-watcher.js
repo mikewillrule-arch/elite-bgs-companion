@@ -108,7 +108,7 @@ const GAME_FILES = {
 const STATUS_STRIP = new Set(['Pips', 'Firegroup', 'GuiFocus']);
 
 class JournalWatcher {
-  constructor({ serverUrl, slug, cmdrName, sessionToken, journalDir, onStatus, onPathNeeded, onDocked }) {
+  constructor({ serverUrl, slug, cmdrName, sessionToken, journalDir, onStatus, onPathNeeded, onDocked, onUndocked }) {
     this.serverUrl    = serverUrl || 'https://elite-bgs.store';
     this.slug         = slug;
     this.cmdrName     = cmdrName;
@@ -116,6 +116,7 @@ class JournalWatcher {
     this.onStatus     = onStatus     || (() => {});
     this.onPathNeeded = onPathNeeded || (() => {});
     this.onDocked     = onDocked     || (() => {});
+    this.onUndocked   = onUndocked   || (() => {});
 
     this.watchDir       = findJournalDir(journalDir) || null;
     this.watcher        = null;
@@ -250,9 +251,12 @@ class JournalWatcher {
         try {
           const ev = JSON.parse(trimmed);
 
-          // Fire docked callback so the overlay can prompt for Galnet capture
+          // Fire docked/undocked callbacks for GalNet Courier prompt lifecycle
           if (ev.event === 'Docked' && ev.StarSystem && ev.StationName) {
             this.onDocked({ systemName: ev.StarSystem, stationName: ev.StationName });
+          }
+          if (ev.event === 'Undocked') {
+            this.onUndocked();
           }
 
           if (BGS_EVENTS.has(ev.event)) {
@@ -426,7 +430,16 @@ class JournalWatcher {
         res.on('data', c => data += c);
         res.on('end', () => {
           if (res.statusCode === 200) {
-            this.onStatus(`✓ ${events.length} events uploaded`);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.recorded === false) {
+                this.onStatus(`✓ ${events.length} event${events.length > 1 ? 's' : ''} processed (no BGS activity)`);
+              } else {
+                this.onStatus(`✓ ${events.length} event${events.length > 1 ? 's' : ''} uploaded`);
+              }
+            } catch {
+              this.onStatus(`✓ ${events.length} event${events.length > 1 ? 's' : ''} uploaded`);
+            }
           } else {
             this.onStatus(`⚠ Upload ${res.statusCode}`);
             this.eventBatch.unshift(...events);

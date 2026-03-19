@@ -205,13 +205,17 @@ async function uploadEvents(cfg, token, events) {
   );
   if (status === 401 || data.reauth_required) return 'reauth';
   if (!success) { warn(`Journal upload failed (${status}): ${data.error || ''}`); return 'error'; }
+  if (data.recorded === false) {
+    ok(`Processed ${cyan(String(events.length))} event(s) — no BGS activity recorded`);
+    return 'ok';
+  }
   const s = data.subStats || {};
   const parts = [];
-  if (s.missionCount)   parts.push(`${s.missionCount} mission(s)`);
+  if (s.missionCount)     parts.push(`${s.missionCount} mission(s)`);
   if (s.bountiesRedeemed) parts.push(`${s.bountiesRedeemed} bounty(s)`);
-  if (s.combatBonds)    parts.push(`${s.combatBonds} bond(s)`);
-  if (s.tradeProfit)    parts.push(`${s.tradeProfit.toLocaleString()} Cr trade`);
-  if (s.explorationData) parts.push(`exploration data`);
+  if (s.combatBonds)      parts.push(`${s.combatBonds} bond(s)`);
+  if (s.tradeProfit)      parts.push(`${s.tradeProfit.toLocaleString()} Cr trade`);
+  if (s.explorationData)  parts.push(`exploration data`);
   ok(`Uploaded ${cyan(String(events.length))} event(s)${parts.length ? ' — ' + parts.join(', ') : ''}`);
   if ((data.newMedals || []).length) info(`New medal(s) earned: ${data.newMedals.join(', ')}`);
   return 'ok';
