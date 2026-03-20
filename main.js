@@ -8,6 +8,42 @@ const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
 
+// ── HUD color helpers (mirrors companion.js logic) ───────────────────────────
+function _hexToHudMatrix(hex) {
+  const h = hex.replace('#', '').padStart(6, '0');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const scale = 3;
+  const rs = Math.max(r, 0.05) * scale;
+  const gs = Math.max(g, 0.05) * scale;
+  const bs = Math.max(b, 0.05) * scale;
+  const x  = 0.08;
+  const fmt = v => String(Math.round(v * 100) / 100);
+  return {
+    matrixRed:   `${fmt(rs)}, ${fmt(gs * x)}, ${fmt(bs * x)}`,
+    matrixGreen: `${fmt(rs * x)}, ${fmt(gs)}, ${fmt(bs * x)}`,
+    matrixBlue:  `${fmt(rs * x)}, ${fmt(gs * x)}, ${fmt(bs)}`,
+  };
+}
+
+function _writeHudColor(journalDir, primaryHex) {
+  const userDir = path.resolve(journalDir, '../../..');
+  const candidates = [
+    path.join(userDir, 'AppData', 'Local', 'Frontier Developments', 'Elite Dangerous', 'Options', 'Graphics'),
+    path.join(userDir, 'Local Settings', 'Application Data', 'Frontier Developments', 'Elite Dangerous', 'Options', 'Graphics'),
+    path.join(userDir, 'Application Data', 'Frontier Developments', 'Elite Dangerous', 'Options', 'Graphics'),
+  ];
+  let gfxDir = candidates[0];
+  for (const p of candidates) { if (fs.existsSync(p)) { gfxDir = p; break; } }
+  fs.mkdirSync(gfxDir, { recursive: true });
+  const m   = _hexToHudMatrix(primaryHex);
+  const xml = `<?xml version="1.0" encoding="UTF-8" ?>\n<GraphicsConfig>\n   <GUIColour>\n      <Default>\n         <LocalisationName>Standard</LocalisationName>\n         <MatrixRed>${m.matrixRed}</MatrixRed>\n         <MatrixGreen>${m.matrixGreen}</MatrixGreen>\n         <MatrixBlue>${m.matrixBlue}</MatrixBlue>\n      </Default>\n   </GUIColour>\n</GraphicsConfig>\n`;
+  const dest = path.join(gfxDir, 'GraphicsConfigurationOverride.xml');
+  fs.writeFileSync(dest, xml, 'utf8');
+  return dest;
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 
@@ -197,6 +233,21 @@ function toggleExpand(force) {
 
 // ── IPC handlers ──────────────────────────────────────────────────────────────
 ipcMain.handle('get-config',     ()        => config);
+
+// Write game HUD color file (triggered by Ctrl+Shift+N flow in overlay)
+ipcMain.handle('write-hud-color', (_, hex) => {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return { ok: false, error: 'Invalid hex color' };
+  const journalDir = config.journalDir;
+  if (!journalDir) return { ok: false, error: 'Journal folder not set — configure it in Settings first.' };
+  try {
+    const dest = _writeHudColor(journalDir, hex);
+    config.hudPrimaryColor = hex;
+    saveConfig(config);
+    return { ok: true, path: dest };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
 ipcMain.handle('save-config',    (_, cfg)  => { Object.assign(config, cfg); saveConfig(config); return true; });
 ipcMain.handle('toggle-expand',  ()        => toggleExpand());
 ipcMain.handle('set-opacity',    (_, val)  => {
@@ -454,6 +505,16 @@ app.whenReady().then(() => {
   // Register global toggle hotkey
   try {
     globalShortcut.register('Ctrl+Shift+B', () => toggleExpand());
+  } catch {}
+
+  // Ctrl+Shift+N — reveal the hidden HUD color picker in the overlay settings
+  try {
+    globalShortcut.register('Ctrl+Shift+N', () => {
+      if (!overlayWin) return;
+      overlayWin.show();
+      toggleExpand(true);
+      overlayWin.webContents.send('reveal-hud-color');
+    });
   } catch {}
 
   if (!config.setupComplete) {

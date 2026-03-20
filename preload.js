@@ -43,4 +43,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onShowGalnetPrompt:   (cb)  => ipcRenderer.on('show-galnet-prompt',   (_, v) => cb(v)),
   onGalnetProgress:     (cb)  => ipcRenderer.on('galnet-capture-progress', (_, v) => cb(v)),
   onGalnetDone:         (cb)  => ipcRenderer.on('galnet-capture-done',  (_, v) => cb(v)),
+
+  // HUD color — write GraphicsConfigurationOverride.xml (Ctrl+Shift+N flow)
+  writeHudColor:        (hex) => ipcRenderer.invoke('write-hud-color', hex),
+  onRevealHudColor:     (cb)  => ipcRenderer.on('reveal-hud-color',    ()     => cb()),
 });

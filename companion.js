@@ -1058,12 +1058,7 @@ async function main() {
   if (cfg.hudPrimaryColor) info(`HUD      : ${bold(cfg.hudPrimaryColor)} ${dim('— run --hud to re-apply after game update')}`);
   console.log();
 
-  // Auto-apply HUD color on startup (idempotent — just overwrites the file)
-  if (cfg.hudPrimaryColor && !args.includes('--hud')) {
-    try {
-      writeHudColorConfig(cfg.journalDir, cfg.hudPrimaryColor);
-    } catch { /* Non-critical — journal dir may not be accessible yet */ }
-  }
+  // HUD color auto-apply removed — use Ctrl+Shift+N in the companion overlay to set HUD color.
 
   // Runtime state
   const state       = loadState();
